@@ -1,6 +1,6 @@
 ---
 title: "Earthquake Dataset"
-author: "Joy Andraos and Michel Al Kodsi"
+author: "Joy Andraos"
 date: "2024-10-21"
 output: pdf_document
 ---
@@ -16,7 +16,7 @@ options(repos = c(CRAN = "https://cloud.r-project.org/"))
 
 # Dataset description including context and features
 
-Here is the link to our dataset from Kaggle with 0 previous work (there are 2 tables, we chose to work on the data from 1995 to 2023 earthquake_1995-2023.csv):
+Here is the link to the dataset from Kaggle with 0 previous work (there are 2 tables, I chose to work on the data from 1995 to 2023 earthquake_1995-2023.csv):
 https://www.kaggle.com/datasets/patricklford/earthquakes-historical-data-and-live-data 
 
 This dataset provides insights into earthquakes worldwide from May 5, 1995, to June 8, 2023. Earthquakes occur when built-up stress from tectonic plate movement is released, generating seismic waves. The relationship between plate tectonics and earthquakes is explored, focusing on how different factors influence seismic intensity.
