@@ -1,6 +1,7 @@
 # earthquake-impact-prediction
 # Dataset Description
 This dataset provides insights into earthquakes worldwide from May 5, 1995, to June 8, 2023: https://www.kaggle.com/datasets/patricklford/earthquakes-historical-data-and-live-data
+
 Earthquakes occur when built-up stress from tectonic plate movement is released, generating seismic waves. The relationship between plate tectonics and earthquakes is explored, focusing on how different factors influence seismic intensity. The context of this project is risk analysis: assessing the significance of future earthquakes or tsunamis. The quantitative response to predict is the numerical significance of a potential earthquake based on several factors such as its location.
 Features include:
  • quantitative attributes: magnitude, date_time, cdi, mmi, sig, nst, dmin, gap, depth, lati
