@@ -1,0 +1,378 @@
+---
+title: "Earthquake Dataset"
+author: "Joy Andraos and Michel Al Kodsi"
+date: "2024-10-21"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+```
+
+
+# Dataset description including context and features
+
+Here is the link to our dataset from Kaggle with 0 previous work (there are 2 tables, we chose to work on the data from 1995 to 2023 earthquake_1995-2023.csv):
+https://www.kaggle.com/datasets/patricklford/earthquakes-historical-data-and-live-data 
+
+This dataset provides insights into earthquakes worldwide from May 5, 1995, to June 8, 2023. Earthquakes occur when built-up stress from tectonic plate movement is released, generating seismic waves. The relationship between plate tectonics and earthquakes is explored, focusing on how different factors influence seismic intensity.
+
+**The context of our project is risk analysis:** assessing the significance of future earthquakes or tsunamis. The quantitative response to predict is the numerical significance of a potential earthquake based on several factors such as its location.
+
+**Features include:**
+
+- **quantitative attributes:** magnitude, date_time, cdi, mmi, sig, nst, dmin, gap, depth, latitude/longitude
+
+- **qualitative attributes:** title, alert, tsunami, magType, location, continent, country.
+
+**Details of each feature:**
+
+Quantitative Attributes:
+
+- magnitude: A numerical value representing the earthquake's strength on a logarithmic scale.
+
+- date_time: The date and time of the earthquake occurrence.
+
+- cdi: The maximum reported intensity for the event (on a scale).
+
+- mmi: The maximum estimated instrumental intensity for the event.
+
+- sig: A significance score that reflects the earthquake's impact based on various factors.
+
+- nst: The total number of seismic stations used to determine the earthquake's location.
+
+- dmin: The horizontal distance from the epicenter to the nearest station (in kilometers).
+
+- gap: The largest azimuthal gap between adjacent seismic stations (in degrees).
+
+- depth: The depth (in kilometers) at which the earthquake rupture began.
+
+- latitude / longitude: Coordinates indicating the location of the earthquake.
+
+Qualitative Attributes:
+
+- title: The name or title given to the earthquake event.
+
+- alert: The alert level assigned to the earthquake (green, yellow, orange, red).
+
+- tsunami: A binary indicator (1 for events in oceanic regions, 0 otherwise).
+
+- magType: The method or algorithm used to calculate the preferred magnitude for the event.
+
+- location: The specific location within the affected country.
+
+- continent: The continent where the earthquake occurred.
+
+- country: The country affected by the earthquake.
+
+```{r load-libraries, message=FALSE, warning=FALSE}
+# Load libraries
+library(tidyverse)
+library(ggplot2)
+library(plotly)
+library(ggcorrplot) 
+library(dplyr)
+library(tinytex)
+library(knitr)
+library(rmarkdown)
+```
+
+# Data mining tasks: data preprocessing, visualization, and exploration techniques 
+
+Building on our school knowledge of tectonic plates, we expect a correlation between earthquake depth, tectonic activity type (e.g., subduction), and geographic location. For example, Japan is known for its significant seismic activity due to its tectonic setting. However, there may be additional factors influencing the likelihood and intensity of earthquakes that we aren’t yet aware of.
+
+To better understand our dataset, we start by inspecting the first few rows of the dataframe, checking for any missing values, and summarizing its shape. This initial examination allows us to assess data quality and structure. Next, we generate a correlation matrix to explore potential relationships among the features, aiming to uncover patterns and gain deeper insights.
+
+```{r load, display and summary of dataset }
+df <- read.csv("earthquake.csv", header = TRUE)
+View(df)
+head(df)
+summary(df)
+
+cat("Original Dataset Dimensions: ", dim(df), "\n")
+
+# Handle missing values
+df[df == ""] <- NA  
+df[df == " "] <- NA  
+df[df == "NA"] <- NA 
+
+cat("Missing Values per Column:\n")
+print(colSums(is.na(df)))
+
+cat("Row lengths in each column:\n")
+sapply(df, length)
+
+head(df)
+```
+Our dataset contains 1,000 observations across 19 columns. When attempting to remove all missing values, the dataset shrank to just 106 observations. Given that most missing data is in the "country" and "continent" columns, we decided to keep the dataset as is. We can omit these columns, as the "location" column already provides the nearest city and country information.
+
+# Hypotheses
+
+We begin by visualizing the correlation matrix, focusing on identifying potential patterns related to earthquake magnitude. For this initial analysis, we limit the selection to numeric columns only.
+
+```{r correlation matrix}
+
+numeric_df <- df %>% select(where(is.numeric))
+correlation_matrix <- cor(numeric_df, use = "complete.obs")
+print(correlation_matrix)
+
+ggcorrplot(correlation_matrix, 
+           method = "circle",  
+           type = "lower",    
+           lab = TRUE,    
+           lab_size = 3,
+           colors = c("blue", "white", "red"),  
+           title = "Correlation Matrix of Factors Influencing Magnitude",
+           ggtheme = theme_minimal())
+
+```
+From the correlation matrix, we can see that the most significant features that affect the sig are magnitude, mmi and cdi.  
+To find further insights, we decided to create the correlation matrix for the categorical features and magnitude. The split is simply arbitrary. Before creating the matrix, one hot encoding was applied.
+
+```{r}
+# Since we have a lot of missing values in continent, we replace them with "Unknown" for the purpose of the matrix
+df$continent[is.na(df$continent)] <- "Unknown"
+
+encoded_df <- model.matrix(~ 0 + continent, data = df)
+numeric_df <- df %>% select(where(is.numeric))  
+combined_df <- cbind(numeric_df, encoded_df)        
+
+correlation_matrix <- cor(combined_df, use = "complete.obs")
+print(correlation_matrix)
+
+ggcorrplot(correlation_matrix, 
+           method = "circle",  
+           type = "lower",    
+           lab = TRUE,      
+           lab_size = 1.5,
+           tl.cex = 8,
+           tl.srt = 45,
+           colors = c("blue", "white", "red"),  
+           title = "Correlation Matrix with Categorical and Numeric Data",
+           ggtheme = theme_minimal())
+```
+The newly added categorical features do not appear to provide meaningful insights into magnitude or significance, so we will omit them from further analysis.
+
+Although depth shows a very low correlation with magnitude (0.02), we decided to visualize this relationship to explore any potential nonlinear patterns that may not be captured by the correlation coefficient alone.
+
+```{r}
+ggplot(data = df) +
+  geom_point(mapping = aes(x = magnitude, y = depth, color = sig), alpha = 0.6) +
+  geom_smooth(mapping = aes(x = magnitude, y = depth), method = "lm", se = TRUE) +
+  scale_color_gradient(low = "blue", high = "red") +
+  theme_minimal() +
+  labs(title = "Magnitude vs. Depth of Earthquakes",
+       x = "Magnitude",
+       y = "Depth (km)",
+       color = "Seismic Significance")
+```
+A clear nonlinear pattern emerges in the visualization, with neither linear nor polynomial fits capturing it well. Interestingly, the data appears to follow a cumulative pattern: if a line were plotted at a -45-degree angle, the data points would resemble the integral of that line.
+
+To delve deeper, we decided to extend this visualization into 3D by adding latitude and longitude to the existing plot.
+```{r}
+install.packages("plot3D")
+```
+```{r}
+
+library(plot3D)
+
+scatter3D(x = df$longitude, y = df$latitude, z = df$depth, 
+          colvar = df$magnitude, 
+          col = ramp.col(c("blue", "red")),
+          pch = 19, cex = 1.5,
+          xlab = "Longitude", ylab = "Latitude", zlab = "Depth",
+          main = "3D Scatter Plot of Earthquakes")
+
+# To visualize it in R (since PDFs don't support 3D plots): run this cell:
+# plot_ly(df, x = ~longitude, y = ~latitude, z = ~depth, 
+#        color = ~magnitude, colors = c('blue', 'red'), type = 'scatter3d', mode = 'markers') %>%
+#  layout(title = "3D Scatter Plot of Earthquakes")
+```
+
+This plot reveals an interesting pattern: recurring earthquakes tend to occur at the same locations, though with varying depths and magnitudes.
+
+Referring back to our correlation matrix findings, we next visualize the relationship between seismic significance (sig) and each of magnitude, MMI, and CDI individually.
+
+Therefore, our hypothesis is:
+
+**There is a significant relationship between seismic significance (sig) and the variables magnitude, MMI, and CDI, with recurring earthquakes exhibiting patterns of similar magnitude at the same locations.**
+
+Specifically, we expect that higher magnitudes will correlate with greater seismic significance, while MMI and CDI will provide additional insights into how these earthquakes impact local communities.
+
+# Simple and multiple linear regression, polynomial regression and interaction terms
+```{r}
+# Scatter plot for CDI vs. Magnitude
+ggplot(df, aes(x = cdi, y = magnitude)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue") +  
+  labs(title = "Scatter Plot of CDI vs. Magnitude",
+       x = "CDI",
+       y = "Magnitude") +
+  theme_minimal()
+
+# Scatter plot for MMI vs. Magnitude
+ggplot(df, aes(x = mmi, y = magnitude)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(title = "Scatter Plot of MMI vs. Magnitude",
+       x = "MMI",
+       y = "Magnitude") +
+  theme_minimal()
+
+# Scatter plot for SIG vs. Magnitude
+ggplot(df, aes(x = sig, y = magnitude)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(title = "Scatter Plot of SIG vs. Magnitude",
+       x = "SIG",
+       y = "Magnitude") +
+  theme_minimal()
+```
+The same cumulative effect is evident in this analysis. However, in the plot of magnitude versus significance, a linear relationship appears to exist. We will test this potential linearity through linear regression analysis.
+
+# Linear Regression: Significance vs. Magnitude
+
+```{r}
+# LR with sig vs mag
+lm.fit <- lm(sig ~ magnitude, data = df)
+summary(lm.fit)
+```
+Our results indicate an R-squared value of 26.25%, which is consistent with our expectations. This means that 26.25% of the the variability of an earthquake can be explained by its magnitude, suggesting that other factors also influence significance. 
+
+Some further analysis of key components:
+
+- Residuals: The difference between the quartiles (1Q: -101.75 and 3Q: -27.31) indicates a relatively symmetrical distribution of residuals, suggesting that the model does not systematically overestimate or underestimate magnitude.
+
+- Coefficient of sig: The coefficient for magnitude (352.92) indicates that for every unit increase in seismic significance, the magnitude is expected to increase by approximately 352.92. The positive sign suggests a direct relationship: as significance increases, so does magnitude.
+
+- Standard Error: (Intercept: 130.21; magnitude: 18.72): The standard errors show the average distance that the estimated coefficients fall from the actual average value of the response variable. Smaller values relative to the coefficients indicate more precise estimates. Both coefficients have relatively small standard errors, suggesting confidence in the estimates.
+
+- t value: (Intercept: -12.30; magnitude: 18.85): The t-value measures how many standard deviations the coefficient is from zero. High t-values (> 1.96) indicate that we can confidently reject the null hypothesis, which states that there is no effect for both the intercept and magnitude.
+
+- Pr(>|t|): (Intercept: <2e-16; magnitude: <2e-16): The p-values indicate the probability of observing the data if the null hypothesis were true. Both p-values are less than 0.001, demonstrating that both the intercept and magnitude are statistically significant predictors. This suggests a strong relationship between significance and magnitude.
+
+- Residual Standard Error: This statistic measures the average distance that the observed values fall from the regression line. A smaller residual standard error indicates a better fit of the model to the data. Here, a value of 259.3 suggests a moderate level of variance around the predicted magnitudes.
+
+- Adjusted R-squared: This value is similar to R-squared but adjusts for the number of predictors in the model. It provides a more accurate measure when comparing models with different numbers of predictors. The close values of R-squared (0.2625) and adjusted R-squared (0.2618) suggest that the inclusion of the variable significantly contributes to explaining the variance in magnitude.
+
+- F-statistic (355.2) and p-value (< 2.2e-16): The F-statistic tests the overall significance of the model. A high F-statistic indicates that at least one predictor variable is significantly related to the response variable (so here, magnitude is significantly related to the significance). The associated p-value being less than 0.001 reinforces that the model as a whole is statistically significant.
+
+Next, we will explore a polynomial fit of degree 5 for the relation between depth and magnitude.
+
+# Polynomial Regression: Depth vs. Magnitude (degree 5)
+
+```{r}
+lm_poly <- lm(depth ~ poly(magnitude, 5), data = df)
+summary(lm_poly)
+```
+The results from the polynomial regression indicate that the model is insignificant, as expected. The R-squared value is only 0.1%, and the negative adjusted R-squared suggests that this small percentage could be due to chance rather than a meaningful relationship. This weak fit is further supported by the high p-value of 0.9516, indicating that none of the polynomial terms significantly contribute to predicting depth based on magnitude.
+
+The coefficients for the polynomial terms are not statistically significant, with p-values much higher than the conventional alpha level of 0.05. This lack of significance reinforces the conclusion that the relationship between depth and magnitude is not adequately captured by a polynomial model of degree 5.
+
+In light of these findings, we will examine the impact of magnitude, CDI, and MMI on significance through multiple linear regression, as suggested by our earlier correlation matrix results.
+
+# Multiple Linear Regression: Significance vs. Magnitude, CDI, and MMI
+
+```{r}
+lm_multi <- lm(sig ~ magnitude + cdi + mmi, data = df)
+summary(lm_multi)
+```
+The results of this multiple linear regression analysis confirm our expectations. The R-squared value of 46.49% indicates that the model explains nearly half of the variability in earthquake significance (sig) through the predictors magnitude, CDI, and MMI. This suggests that while these three factors are influential, a significant portion (53.51%) of the variability is still unexplained, indicating that additional variables should be explored to improve predictive accuracy.
+
+The coefficients for all predictors are statistically significant, as evidenced by their low p-values (all < 0.001). This indicates a strong relationship between each predictor and earthquake significance
+
+The residuals show a range of values from -410.97 to 1811.97, with a median close to zero, suggesting that the model does not systematically overestimate or underestimate significance. However, the large range indicates that some predictions may be substantially off, which could be due to outliers or other influential factors.
+
+Given the cumulative effects observed previously, we will further investigate the relationship between the significance of earthquakes and their locations using linear regression.
+
+# Linear Regression: Significance vs. Location
+
+```{r}
+# Box plot for SIG vs. Location on a sample of the dataset
+df_sample <- df %>% sample_frac(0.035)
+ggplot(df_sample, aes(x = as.factor(location), y = sig)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of SIG vs. Location",
+       x = "Location",
+       y = "Sig") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r}
+lm.fit <- lm(sig ~ location, data = df)
+summary(lm.fit)
+```
+The results of this linear regression analysis reveal that location alone is a significant predictor of earthquake significance (sig) with an R-squared value of 80.03%. This suggests that the geographic context of an earthquake plays a critical role in determining its impact.
+
+The residuals range from -1043.50 to 1268.88, with a median of zero, indicating no systematic bias in predictions. However, the wide range suggests either the presence of outliers or simply the unpredictability and complexity of earthquakes.
+
+Given this strong relationship, we will incorporate location into a multiple linear regression model alongside magnitude, CDI, and MMI to further investigate the combined effects of these variables on earthquake significance:
+
+# Multiple Linear Regression: Significance vs. Magnitude, CDI, MMI and Location
+
+```{r}
+lm_multi <- lm(sig ~ magnitude + cdi + mmi + location, data = df)
+summary(lm_multi)
+```
+As expected, the results from the multiple linear regression indicate a significant improvement in the model's explanatory power, with an R-squared value of 90.75%. This means that approximately 90.75% of the variability in earthquake significance (sig) can be explained by the combined effects of magnitude, CDI, MMI, and location.
+
+The residuals range from -858.99 to 1057.47, with a median of zero, indicating no systematic bias in predictions. The residual standard error of 130.5 suggests variability in the model's predictions, which could reflect the complexities of earthquake behavior not fully captured by the model.
+
+Given the strong relationships identified, we can further explore interactions between magnitude and location. This will be done using an interaction term in the linear regression model:
+
+# Interaction terms: Magnitude and Location in Predicting Significance
+
+```{r}
+lm_inter <- lm(sig ~ magnitude * location + magnitude + location, data = df)
+summary(lm_inter)
+```
+As expected, the R-squared value increases to 96.14%, indicating a significant improvement in the model's explanatory power: a large portion of the variability in earthquake significance can now be attributed to both magnitude and its interaction with different locations.
+
+The residuals range from -524.13 to 801.57, with a median close to zero, suggesting that the model's predictions are unbiased overall. However, the residual standard error of 100.9 indicates that while the model is capturing a large portion of variability, there is still some degree of prediction error.
+
+# Model performance
+
+In evaluating our linear regression model's performance, it is important to consider common issues that can affect its validity and interpretability:
+
+1. Non-linearity of the Response-Predictor Relationships:
+
+While linear regression assumes a linear relationship between predictors and the response variable, our analysis revealed potential non-linear patterns, especially in the relationship between depth and magnitude. Polynomial regression was tested to account for these non-linearities, but the low R-squared values indicated limited effectiveness. Future analysis may benefit from non-linear models to better capture these relationships.
+
+2. Correlation of Error Terms:
+
+The assumption of independence of error terms is vital for linear regression. Correlated errors can lead to underestimations of standard errors. Future analysis of this project should examine residual plots for patterns, which could suggest correlation. 
+
+3. Non-constant Variance of Error Terms:
+
+The presence of heteroscedasticity—where the variance of errors varies across levels of the predictor—could bias our standard error estimates and statistical tests. In our future residual analysis, a non-constant shape in residual plots may indicate non-constant variance. 
+
+4. Outliers:
+
+The analysis revealed considerable variation in significance scores, suggesting the presence of outliers. However, in the case of earthquakes, we must distinguish between those that are true anomalies and those that represent typical variations in earthquake behavior.
+
+5. High-leverage Points:
+
+High-leverage points are those that can disproportionately influence the regression line due to their extreme predictor values. Standardized residual plots can be used to identify these points and investigate whether they should be kept or removed from the analysis.
+
+6. Collinearity:
+
+The presence of collinearity among predictors can inflate standard errors and complicate interpretations. Our multiple regression analysis highlighted potential collinearity, particularly with the inclusion of the location variable. Variance Inflation Factor (VIF) analysis should be conducted to assess the severity of collinearity. If high VIF values are found, we might consider dropping variables or combining them to solve this issue.
+
+# Results & Final Comments
+
+In conclusion, our analysis demonstrates that the significance and impact of an earthquake can be effectively predicted based on several key factors: magnitude, location, CDIs, and MMIs. The final model resulted in an impressive R-squared value of 96.14%, indicating that our predictors explain a significant portion of the variability in earthquake significance.
+
+The regression results revealed the following insights:
+
+Magnitude has a positive coefficient, suggesting that as the magnitude of an earthquake increases, so does its significance. However, the magnitude's impact alone may not fully capture the complexity of earthquake significance when considering location as an interactive factor.
+
+Location plays a crucial role, with specific locations such as Japan showing higher significance scores. This highlights the necessity of incorporating geographic context into seismic risk assessments.
+
+Both CDI and MMI contribute positively to the model, with significant p-values, reinforcing their roles as essential predictors of earthquake impact.
+
+Therefore, with a p-value < 2.2e-16, we can confidently reject the null hypothesis, affirming that the variables included in our model significantly contribute to explaining earthquake significance. This analysis not only enhances our understanding of earthquake dynamics but also emphasizes the importance of incorporating multiple predictive factors in seismic impact assessments. Future work could expand on these findings by exploring the techniques mentionned previously (residual plots, VIF...), to further improve prediction accuracy and deepen our insights into earthquake behavior.
